@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<script lang="javascript" src="js/jquery-3.1.0.min.js"></script>
+	<script lang="javascript" src="js/d3.v4.min.js"></script>
+	<script lang="javascript" src="js/flare.js"></script>
+	<link rel="stylesheet" href="css/hierarchy.css">
+</head>
+<body>
+	<div id="hierarchy1">
+
+	</div>
+	<div id="hierarchy2">
+
+	</div>
+	
+	<script>
+		/*
+		 * Name: Jared Hwang
+		 */
+		
+		// https://css-tricks.com/snippets/javascript/lighten-darken-color/
+		function LightenDarkenColor(col, amt) {
+			var usePound = false;
+			if (col[0] == "#") {
+				col = col.slice(1);
+				usePound = true;}
+			var num = parseInt(col,16);
+			
+			var r = (num >> 16) + amt;
+			if (r > 255) r = 255; else if  (r < 0) r = 0;
+			
+			var b = ((num >> 8) & 0x00FF) + amt;
+			if (b > 255) b = 255; else if  (b < 0) b = 0;
+			
+			var g = (num & 0x0000FF) + amt;
+			if (g > 255) g = 255; else if (g < 0) g = 0;
+			return (usePound?"#":"") + (g | (b << 8) | (r << 16)).toString(16);
+		}
+
+		function mouseoverlink(d){
+
+			d3.selectAll('path')
+				.style('opacity', 0.3)
+			d3.selectAll('text')
+				.style("font-size", "0px")
+			d3.selectAll('circle')
+				.style('opacity', 0.3)
+			
+			var sequenceArray = d.target.ancestors().reverse();
+			var sequenceArraywRoot = sequenceArray.map(function(elem) { return elem })
+			
+			sequenceArray.shift();
+			var sequenceArrayData = sequenceArray.map(function(elem) {return elem.data })
+
+			nodelink.selectAll('path')
+				.filter(function(node){
+					return (sequenceArray.indexOf(node.target) >= 0);})
+				.style("opacity", 1)
+
+			nodelink.selectAll('circle')
+				.filter(function(node){
+					return (sequenceArray.indexOf(node) >= 0)})
+				.style('opacity', 1)
+			
+			nodelink.selectAll('text')
+				.filter(function(node){
+					return (sequenceArraywRoot.indexOf(node) >= 0) })
+				.style('font-size', '10pt')
+			
+			sunburst.selectAll('path')
+					.filter(function(node){
+						return sequenceArrayData.includes(node.data) })
+					.style("opacity", 1)
+
+		}
+		function mouseleavelink(d){
+			d3.selectAll("path")
+				.style("opacity", 1)
+			d3.selectAll('text')
+				.style('font-size', '0em')
+			d3.selectAll('circle')
+				.style('opacity', 1)
+
+		}
+
+		function mouseoverburst(d){
+			d3.selectAll("path")
+				.style("opacity", 0.3)
+			var sequenceArray = d.ancestors().reverse();
+			var sequenceArraywRoot = sequenceArray.map(function(elem){ return elem.data})
+
+			sequenceArray.shift();
+
+			var sequenceArrayData = sequenceArray.map(function(elem){ return elem.data })
+
+			nodelink.selectAll("path")
+				.style("opacity", 0.3)
+
+			nodelink.selectAll('path')
+				.filter(function(node){ 
+					return sequenceArrayData.includes(node.target.data) })
+				.style("opacity", 1);
+
+			nodelink.selectAll('circle')
+				.style('opacity', 0.3)
+			nodelink.selectAll('text')
+				.style("font-size", '0em')
+
+			nodelink.selectAll('text')
+				.filter(function(node){ 
+					return sequenceArraywRoot.includes(node.data) })
+				.style('font-size', '10pt')
+				.style('opacity', 1)
+
+			nodelink.selectAll('circle')
+				.filter(function(node){
+					return sequenceArraywRoot.includes(node.data) })
+				.style('opacity', 1)
+
+			sunburst.selectAll('path')
+				.filter(function(node){
+					return (sequenceArray.indexOf(node) >= 0); })
+				.style("opacity", 1)
+		}
+
+		function mouseleaveburst(d){
+			d3.selectAll("path")
+				.style("opacity", 1)
+			d3.selectAll("text")
+				.style("font-size", 0)
+			d3.selectAll('circle')
+				.style('opacity', 1)
+		}
+
+		// Sunburst 
+		var width = $(window).width() / 2;
+		var height = $(window).height();
+		var radius = Math.min(width, height) / 2;
+
+		var formatNumber = d3.format(",d");
+
+		var x = d3.scaleLinear()
+			.range([0, 2 * Math.PI]);
+
+		var y = d3.scaleSqrt()
+			.range([0, radius]);
+
+		var color = d3.scaleOrdinal(d3.schemeCategory10);
+
+		var partition = d3.partition();
+
+		var arc = d3.arc()
+			.startAngle(function(d) { return Math.max(0, Math.min(2 * Math.PI, x(d.x0))); })
+			.endAngle(function(d) { return Math.max(0, Math.min(2 * Math.PI, x(d.x1))); })
+			.innerRadius(function(d) { return Math.max(0, y(d.y0)); })
+			.outerRadius(function(d) { return Math.max(0, y(d.y1)); })
+
+		var sunburst = d3.select("#hierarchy1").append("svg")
+			.attr("width", width)
+			.attr("height", height)
+			.append("g")
+			.attr("transform", "translate(" + width / 2 + "," + (height / 2) + ")")
+			.on("mouseleave", mouseleaveburst)
+
+		var sunroot = d3.hierarchy(flare);
+		sunroot.sum(function(d) { return d.size; });
+
+		sunburst.selectAll("path")
+			.data(partition(sunroot).descendants())
+			.enter().append("path")
+			.attr("d", arc)
+			.attr("display", function(d) { return d.depth ? null : "none"; })
+			.style("fill", function(d) { 
+								var highest_parent = d;
+								while (highest_parent.depth > 1) highest_parent = highest_parent.parent;
+
+								arc_color = LightenDarkenColor(color(highest_parent.data.name), 20 * d.depth)
+								return (arc_color) })
+			.on("mouseover", mouseoverburst)
+
+		// NodeLink
+		var nodelink = d3.select("#hierarchy2").append('svg')
+			.attr("width", width)
+			.attr("height", height)
+			g = nodelink.append("g").attr("transform", "translate(" + (width/2) + "," + (height/2) + ")");
+
+		var tree = d3.tree()
+			.size([2 * Math.PI, width*2/5])
+			.separation(function(a, b) { return (a.parent == b.parent ? 1 : 2) / a.depth; });
+
+		var nlroot = d3.hierarchy(flare);
+
+		tree(nlroot);
+
+		var link = g.selectAll("link")
+			.data(nlroot.links())
+			.enter().append("path")
+			.attr("class", "link")
+			.attr("fill", "none")
+			.attr("stroke", "#555")
+			.attr("stroke-opacity", 0.4)
+			.attr("stroke-width", 1.5)
+			.attr("d", d3.linkRadial()
+				.angle(function(d) { return d.x; })
+				.radius(function(d) { return d.y; }))
+			.on("mouseover", mouseoverlink)
+			.on("mouseleave", mouseleavelink)
+			
+
+		var node = g.selectAll("node")
+			.data(nlroot.descendants())
+			.enter().append("g")
+			.attr("class", function(d) { return "node" + (d.children ? " node--internal" : " node--leaf"); })
+			.attr("transform", function(d) { return "translate(" + radialPoint(d.x, d.y) + ")"; })
+		
+		node.append("circle")
+			.attr("class", "path")
+			.attr("r", 2.5)
+			.style("fill", function(d) { 
+								var highest_parent = d;
+								while (highest_parent.depth > 1) highest_parent = highest_parent.parent;
+
+								arc_color = LightenDarkenColor(color(highest_parent.data.name), 20 * d.depth)
+								return (arc_color) })
+
+		node.append("text")
+			.attr("dy", "0.31em")
+			.attr("x", function(d) { return d.x < Math.PI === !d.children ? 6 : -6; })
+			.attr("text-anchor", function(d) { return d.x < Math.PI === !d.children ? "start" : "end"; })
+			.attr("transform", function(d) { return "rotate(" + (d.x < Math.PI ? d.x - Math.PI / 2 : d.x + Math.PI / 2) * 180 / Math.PI + ")"; })
+			.text(function(d) { return d.data.name })
+			.style("fill", function(d) { 
+								var highest_parent = d;
+								while (highest_parent.depth > 1) highest_parent = highest_parent.parent;
+
+								arc_color = LightenDarkenColor(color(highest_parent.data.name), 20 * d.depth)
+								return (arc_color) })
+			.style('font-size', '0em')
+
+		function radialPoint(x, y) {
+			return [(y = +y) * Math.cos(x -= Math.PI / 2), y * Math.sin(x)]; }
+
+	</script>
+</body>
+</html>
